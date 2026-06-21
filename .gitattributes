@@ -1,0 +1,6 @@
+# This repo ships a patched bundle in dist/ (no src/). Tell GitHub Linguist
+# to count it as JavaScript, not exclude it as generated output.
+dist/** linguist-generated=false linguist-language=JavaScript
+
+# Local UI preview only — not application source.
+assets/symbol-preview.html linguist-documentation
