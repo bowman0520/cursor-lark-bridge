@@ -1,0 +1,44 @@
+{
+  "name": "cursor-lark-bridge",
+  "version": "0.1.0",
+  "description": "Bridge Feishu/Lark messenger with the local Cursor Agent CLI (cursor-agent). Forked from lark-channel-bridge.",
+  "type": "module",
+  "bin": {
+    "cursor-lark-bridge": "./bin/cursor-lark-bridge.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/cursor-lark-bridge.mjs run"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.4.0",
+    "@larksuiteoapi/node-sdk": "^1.65.0",
+    "commander": "^12.1.0",
+    "https-proxy-agent": "^9.0.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "feishu",
+    "lark",
+    "cursor",
+    "cursor-agent",
+    "cli",
+    "channel",
+    "bridge"
+  ],
+  "license": "MIT"
+}

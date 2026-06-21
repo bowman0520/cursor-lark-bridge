@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cursor 卡片符号预览</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --card: #fff;
+      --text: #1f2329;
+      --muted: #8f959e;
+      --violet: #7c3aed;
+      --indigo: #4f46e5;
+      --red: #dc2626;
+      --green: #16a34a;
+      --grey: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+      line-height: 1.5;
+    }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p.lead { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .scheme {
+      background: var(--card);
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+    }
+    .scheme.rec { border-color: var(--violet); box-shadow: 0 0 0 1px var(--violet); }
+    .scheme-head {
+      padding: 12px 16px;
+      font-weight: 600;
+      border-bottom: 1px solid #eef0f3;
+      font-size: 15px;
+    }
+    .scheme.rec .scheme-head { background: #f5f3ff; color: var(--violet); }
+    .mock {
+      padding: 14px 16px 16px;
+      font-size: 14px;
+    }
+    .bar { color: var(--muted); font-style: italic; margin-bottom: 10px; font-size: 13px; }
+    .panel {
+      border-left: 3px solid var(--violet);
+      background: #faf5ff;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .panel.tool { border-color: var(--indigo); background: #eef2ff; }
+    .panel.tool.done { border-color: var(--grey); background: #f9fafb; }
+    .panel.tool.err { border-color: var(--red); background: #fef2f2; }
+    .footer { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .btn {
+      display: inline-block;
+      margin-top: 10px;
+      background: #fee2e2;
+      color: #b91c1c;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      font-size: 14px;
+    }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eef0f3; }
+    th { background: #f9fafb; font-weight: 600; }
+    .sym { font-size: 18px; width: 56px; text-align: center; }
+    .rec-tag { color: var(--violet); font-size: 12px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Cursor 卡片符号 · 三套方案</h1>
+  <p class="lead">在浏览器里看的是真实 Unicode 符号（和飞书卡片里显示的一样）。选好方案后回复 A / B / C 即可。</p>
+
+  <div class="grid">
+    <div class="scheme">
+      <div class="scheme-head">现状</div>
+      <div class="mock" id="current"></div>
+    </div>
+    <div class="scheme rec">
+      <div class="scheme-head">方案 A · Cursor 极简 <span class="rec-tag">推荐</span></div>
+      <div class="mock" id="a"></div>
+    </div>
+    <div class="scheme">
+      <div class="scheme-head">方案 B · 柔和圆点</div>
+      <div class="mock" id="b"></div>
+    </div>
+    <div class="scheme">
+      <div class="scheme-head">方案 C · 轻量 Emoji</div>
+      <div class="mock" id="c"></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>场景</th>
+        <th>现状</th>
+        <th>A 极简</th>
+        <th>B 圆点</th>
+        <th>C Emoji</th>
+      </tr>
+    </thead>
+    <tbody id="table"></tbody>
+  </table>
+
+  <script>
+    const schemes = {
+      current: {
+        name: "现状",
+        brand: "▸",
+        thinking: "🧠",
+        toolFooter: "🧰",
+        streamFooter: "✍️",
+        toolSummary: "⚡",
+        toolRun: "⏳",
+        toolOk: "✅",
+        toolErr: "❌",
+        stop: "⏹",
+        timeout: "⏱",
+        error: "⚠️",
+      },
+      a: {
+        name: "A",
+        brand: "◆",
+        thinking: "◎",
+        toolFooter: "⚙",
+        streamFooter: "✎",
+        toolSummary: "◈",
+        toolRun: "◌",
+        toolOk: "✓",
+        toolErr: "✗",
+        stop: "■",
+        timeout: "◷",
+        error: "△",
+      },
+      b: {
+        name: "B",
+        brand: "●",
+        thinking: "◉",
+        toolFooter: "◇",
+        streamFooter: "…",
+        toolSummary: "⊞",
+        toolRun: "○",
+        toolOk: "●",
+        toolErr: "◆",
+        stop: "□",
+        timeout: "◔",
+        error: "▲",
+      },
+      c: {
+        name: "C",
+        brand: "✦",
+        thinking: "💭",
+        toolFooter: "🔧",
+        streamFooter: "📝",
+        toolSummary: "✨",
+        toolRun: "🔄",
+        toolOk: "☑",
+        toolErr: "⛔",
+        stop: "⏹",
+        timeout: "⏳",
+        error: "⚠",
+      },
+    };
+
+    function mock(s) {
+      return `
+        <div class="bar">${s.brand} Cursor Agent · composer-2.5</div>
+        <div class="panel">${s.thinking} <b>思考中</b></div>
+        <div class="panel tool">${s.toolRun} <b>Shell</b> — ls -la</div>
+        <div class="panel tool done">${s.toolOk} <b>Read</b> — dist/cli.js</div>
+        <div class="panel tool err">${s.toolErr} <b>Bash</b> — failed</div>
+        <div class="panel tool">${s.toolSummary} <b>3 个工具调用</b></div>
+        <div class="footer">${s.thinking} Cursor · 正在思考</div>
+        <div class="footer">${s.toolFooter} Cursor · 正在调用工具</div>
+        <div class="footer">${s.streamFooter} Cursor · 正在输出</div>
+        <div class="footer">${s.error} 网络连接 Cursor 服务失败</div>
+        <div class="footer">${s.timeout} 5 分钟无响应，已自动终止</div>
+        <div class="btn">${s.stop} 终止</div>
+      `;
+    }
+
+    document.getElementById("current").innerHTML = mock(schemes.current);
+    document.getElementById("a").innerHTML = mock(schemes.a);
+    document.getElementById("b").innerHTML = mock(schemes.b);
+    document.getElementById("c").innerHTML = mock(schemes.c);
+
+    const rows = [
+      ["顶栏标识", "brand"],
+      ["思考面板 / 底部", "thinking"],
+      ["调用工具（底部）", "toolFooter"],
+      ["输出文字（底部）", "streamFooter"],
+      ["多工具折叠汇总", "toolSummary"],
+      ["工具进行中", "toolRun"],
+      ["工具成功", "toolOk"],
+      ["工具失败", "toolErr"],
+      ["终止 / 中断", "stop"],
+      ["超时", "timeout"],
+      ["出错提示", "error"],
+    ];
+
+    document.getElementById("table").innerHTML = rows.map(([label, key]) => `
+      <tr>
+        <td>${label}</td>
+        <td class="sym">${schemes.current[key]}</td>
+        <td class="sym">${schemes.a[key]}</td>
+        <td class="sym">${schemes.b[key]}</td>
+        <td class="sym">${schemes.c[key]}</td>
+      </tr>
+    `).join("");
+  </script>
+</body>
+</html>
