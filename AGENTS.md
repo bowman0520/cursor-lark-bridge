@@ -19,6 +19,11 @@
 
 - 用户叫 **Bowman**；通过 bridge 会话回复时，**每次都要带上 Bowman 的名字**（开头称呼、文中点名或结尾署名均可）。
 
+## Bridge 斜杠命令
+
+- `/model`、`/usage`、`/cd`、`/new`、`/status` 等由 bridge 本地处理，不交给 agent。
+- `/usage` 调用本机 `cursor-usage` 查询 Cursor 双池额度（Auto+Composer / API）。
+
 ## 相对原版（Claude）已改动的核心点
 
 集中在 `dist/cli.js` 三处，改动时优先只碰这些：

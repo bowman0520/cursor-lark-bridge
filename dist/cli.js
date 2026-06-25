@@ -1108,7 +1108,7 @@ sender_name: ...
 
 ## bridge \u659C\u6760\u547D\u4EE4
 
-\`/model\`\u3001\`/cd\`\u3001\`/new\`\u3001\`/status\` \u7B49\u4EE5 \`/\` \u5F00\u5934\u7684\u6D88\u606F\u7531 bridge \u672C\u5730\u5904\u7406\uFF0C**\u4E0D\u4F1A**\u53D1\u7ED9\u4F60\u3002\u7528\u6237\u8981\u5207\u6362\u6A21\u578B\u65F6\u7528 \`/model <slug>\`\uFF08\u4E0B\u4E00\u6761\u6D88\u606F\u8D77\u751F\u6548\uFF09\uFF1B\u4F60**\u4E0D\u8981**\u6539 bridge \u6E90\u7801\u6216 \`sessions.json\` \u53BB\u5B9E\u73B0\u8FD9\u4E2A\u529F\u80FD\u3002
+\`/model\`\u3001\`/usage\`\u3001\`/cd\`\u3001\`/new\`\u3001\`/status\` \u7B49\u4EE5 \`/\` \u5F00\u5934\u7684\u6D88\u606F\u7531 bridge \u672C\u5730\u5904\u7406\uFF0C**\u4E0D\u4F1A**\u53D1\u7ED9\u4F60\u3002\u7528\u6237\u8981\u5207\u6362\u6A21\u578B\u65F6\u7528 \`/model <slug>\`\uFF08\u4E0B\u4E00\u6761\u6D88\u606F\u8D77\u751F\u6548\uFF09\uFF1B\u8981\u67E5 Cursor \u989D\u5EA6\u7528 \`/usage\`\uFF1B\u4F60**\u4E0D\u8981**\u6539 bridge \u6E90\u7801\u6216 \`sessions.json\` \u53BB\u5B9E\u73B0\u8FD9\u4E9B\u529F\u80FD\u3002
 `;
 var CursorAdapter = class {
   id = "cursor";
@@ -2589,6 +2589,7 @@ function helpCard() {
         "- `/config` \u2014 \u8C03\u6574\u504F\u597D\uFF08\u6D88\u606F\u56DE\u590D\u65B9\u5F0F\u3001\u5DE5\u5177\u8C03\u7528\u663E\u793A\uFF09",
         "- `/status` \u2014 \u5F53\u524D\u72B6\u6001",
         "- `/model [slug|default|list [filter]]` \u2014 \u67E5\u770B/\u5217\u8868/\u5207\u6362\u6A21\u578B\uFF08\u4E0B\u4E00\u8F6E\u751F\u6548\uFF09",
+        "- `/usage` \u2014 \u67E5\u770B Cursor \u8D26\u53F7\u989D\u5EA6\uFF08\u603B\u7528\u91CF / Auto+Composer / API \u4E09\u9879\uFF09",
         "- `/stop` \u2014 \u7ED3\u675F\u5F53\u524D\u6B63\u5728\u8DD1\u7684\u4EFB\u52A1\uFF08\u4E5F\u53EF\u70B9\u5361\u7247\u5E95\u90E8 \u23F9 \u7EC8\u6B62 \u6309\u94AE\uFF09",
         "- `/timeout [N|off|default]` \u2014 \u5F53\u524D session \u7684\u63A2\u6D3B\u5206\u949F\u6570,`/config` \u6539\u5168\u5C40\u9ED8\u8BA4",
         "- `/ps` \u2014 \u5217\u51FA\u672C\u673A\u6240\u6709 bot,\u6807\u8BC6\u5F53\u524D\u6B63\u5728\u56DE\u590D\u7684\u90A3\u4E2A",
@@ -2665,6 +2666,7 @@ function summarizeInput(name, input) {
   };
   switch (name) {
     case "Bash":
+    case "Shell":
       return pick("command");
     case "Read":
     case "Edit":
@@ -2771,7 +2773,11 @@ function cardBrandBar(state) {
   return noteMd(`_\u25B8 ${label}_`);
 }
 function renderCard(state) {
-  const elements = [cardBrandBar(state)];
+  const elements = [];
+  const progressBanner = renderRunProgressBanner(state);
+  const completionBanner = renderRunCompletionBanner(state);
+  if (progressBanner) elements.push(markdown(progressBanner.replace(/^> /gm, "")));
+  if (completionBanner) elements.push(markdown(completionBanner));
   if (state.reasoning.content) {
     elements.push(reasoningPanel(state.reasoning.content, state.reasoning.active));
   }
@@ -2794,9 +2800,8 @@ function renderCard(state) {
   } else if (state.terminal === "done" && elements.length === 0) {
     elements.push(noteMd("_\uFF08\u672A\u8FD4\u56DE\u5185\u5BB9\uFF09_"));
   }
-  if (state.terminal === "running") {
-    if (state.footer) elements.push(footerStatus(state.footer));
-    elements.push(stopButton());
+  if (state.terminal === "running" && !progressBanner && state.footer) {
+    elements.push(footerStatus(state.footer, state));
   }
   return {
     schema: "2.0",
@@ -2903,10 +2908,263 @@ function stopButton() {
     behaviors: [{ type: "callback", value: { cmd: "stop" } }]
   };
 }
-function footerStatus(status) {
+function footerStatus(status, state) {
   const p = BRAND.name;
-  const text = status === "thinking" ? `\u{1F9E0} ${p} \xB7 \u6B63\u5728\u601D\u8003` : status === "tool_running" ? `\u{1F9F0} ${p} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177` : `\u270D\uFE0F ${p} \xB7 \u6B63\u5728\u8F93\u51FA`;
+  const elapsed = status === "tool_running" ? formatToolElapsed(state?.toolStartedAt) : "";
+  const text = status === "thinking" ? `\u{1F9E0} ${p} \xB7 \u6B63\u5728\u601D\u8003` : status === "tool_running" ? `\u{1F9F0} ${p} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177${elapsed}` : `\u270D\uFE0F ${p} \xB7 \u6B63\u5728\u8F93\u51FA`;
   return noteMd(text);
+}
+function formatToolElapsed(startedAt) {
+  if (!startedAt) return "";
+  const sec = Math.floor((Date.now() - startedAt) / 1e3);
+  if (sec < 5) return "";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? ` ${m}m${s < 10 ? "0" : ""}${s}s` : ` ${s}s`;
+}
+function formatRunElapsed(startedAt) {
+  if (!startedAt) return "0s";
+  const sec = Math.max(0, Math.floor((Date.now() - startedAt) / 1e3));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m}m${s < 10 ? "0" : ""}${s}s` : `${s}s`;
+}
+function formatProgressClock(ts = Date.now()) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).format(new Date(ts));
+}
+function getRunningTool(state) {
+  const running = state.blocks.filter((b) => b.kind === "tool" && b.tool.status === "running");
+  return running[running.length - 1]?.tool ?? null;
+}
+function describeRunStatus(state) {
+  if (state.footer === "tool_running") {
+    const latest = getRunningTool(state);
+    const n = state.blocks.filter((b) => b.kind === "tool").length;
+    const done = state.blocks.filter((b) => b.kind === "tool" && b.tool.status !== "running").length;
+    if (latest?.name) {
+      const summary = summarizeInput(latest.name, latest.input);
+      const head = summary ? `${latest.name} \u2014 ${summary.slice(0, 72)}` : latest.name;
+      return `\u6B63\u5728\u6267\u884C **${head}** \uFF08\u5DF2\u5B8C\u6210 ${done}/${n} \u4E2A\u5DE5\u5177\uFF09`;
+    }
+    return `\u6B63\u5728\u8C03\u7528\u5DE5\u5177\uFF08\u5171 ${n} \u4E2A\uFF09`;
+  }
+  if (state.footer === "streaming") return "\u6B63\u5728\u8F93\u51FA\u56DE\u590D";
+  if (state.reasoning?.active) return "\u6B63\u5728\u601D\u8003";
+  return "\u4EFB\u52A1\u8FDB\u884C\u4E2D";
+}
+function renderRunProgressBanner(state) {
+  if (state.terminal !== "running") return "";
+  const elapsed = formatRunElapsed(state.runStartedAt ?? state.toolStartedAt);
+  const tick = Math.max(1, state.progressTick ?? 0);
+  const clock = formatProgressClock(state.progressUpdatedAt ?? Date.now());
+  return `> \u23F3 **${BRAND.name} \xB7 \u4EFB\u52A1\u8FDB\u884C\u4E2D** \xB7 \u5DF2\u8FD0\u884C **${elapsed}** \xB7 ${describeRunStatus(state)}
+> _\u8FDB\u5EA6\u66F4\u65B0 #${tick} \xB7 ${clock}_`;
+}
+function renderRunCompletionBanner(state) {
+  if (state.terminal === "done") {
+    const elapsed = formatRunElapsed(state.runStartedAt);
+    return `\u2705 **${BRAND.name} \xB7 \u4EFB\u52A1\u5DF2\u5B8C\u6210** \xB7 \u603B\u8017\u65F6 **${elapsed}** \xB7 ${formatProgressClock()}`;
+  }
+  if (state.terminal === "error") {
+    return `\u26A0\uFE0F **${BRAND.name} \xB7 \u4EFB\u52A1\u51FA\u9519** \xB7 ${formatAgentError(state.errorMsg ?? "\u672A\u77E5\u9519\u8BEF")}`;
+  }
+  if (state.terminal === "interrupted") {
+    return `\u23F9 **${BRAND.name} \xB7 \u4EFB\u52A1\u5DF2\u4E2D\u65AD**`;
+  }
+  if (state.terminal === "idle_timeout") {
+    const mins = state.idleTimeoutMinutes ?? 0;
+    return `\u23F1 **${BRAND.name} \xB7 \u4EFB\u52A1\u5DF2\u8D85\u65F6** \xB7 ${mins} \u5206\u949F\u65E0\u54CD\u5E94\u540E\u5DF2\u7EC8\u6B62`;
+  }
+  return "";
+}
+var TURN_CARD_MIN_INTERVAL_MS = 300;
+var TURN_CARD_TEXT_THROTTLE_MS = 400;
+var TURN_CARD_MAX_BYTES = 25 * 1024;
+var TURN_CARD_MAX_TOOL_LINES = 22;
+var TURN_CARD_SEGMENT_CARRY_TOOLS = 5;
+var TURN_CARD_TOOL_SUMMARY_MAX = 80;
+function turnUpdateIntervalMs(state) {
+  if (state.terminal !== "running") return 0;
+  if (state.footer === "streaming") return TURN_CARD_TEXT_THROTTLE_MS;
+  return TURN_CARD_MIN_INTERVAL_MS;
+}
+function formatTurnToolLine(tool) {
+  const icon = tool.status === "running" ? "\u25B8" : tool.status === "error" ? "\u2717" : "\u2713";
+  const summary = summarizeInput(tool.name, tool.input);
+  const head = summary ? `${tool.name} \u2014 ${truncate2(summary, TURN_CARD_TOOL_SUMMARY_MAX)}` : tool.name;
+  return `${icon} ${head}`;
+}
+function filterStateForActiveSegment(state, toolOffset) {
+  let toolIdx = 0;
+  const blocks = [];
+  for (const b of state.blocks) {
+    if (b.kind === "tool") {
+      if (toolIdx >= toolOffset) blocks.push(b);
+      toolIdx++;
+    } else {
+      blocks.push(b);
+    }
+  }
+  return { ...state, blocks };
+}
+function buildSealedTurnCard(state, segment) {
+  const elapsed = formatRunElapsed(state.runStartedAt ?? state.toolStartedAt);
+  const segLabel = segment.index > 1 ? `\u5DE5\u4F5C\u4E2D #${segment.index}` : "\u5DE5\u4F5C\u4E2D";
+  const lines = [
+    `**${BRAND.name} \xB7 ${segLabel}** \xB7 \u5DF2\u8FD0\u884C **${elapsed}**`,
+    `_\u672C\u6BB5\u5DF2\u5C01\u5B58 \xB7 ${formatProgressClock()}_`
+  ];
+  const tools = state.blocks.filter((b) => b.kind === "tool").map((b) => b.tool);
+  const slice = tools.slice(segment.toolOffset);
+  let display = slice;
+  if (slice.length > TURN_CARD_MAX_TOOL_LINES) {
+    const skipped = slice.length - TURN_CARD_MAX_TOOL_LINES;
+    display = slice.slice(-TURN_CARD_MAX_TOOL_LINES);
+    lines.push(`_\u2026 \u7701\u7565\u8F83\u65E9 ${segment.toolOffset + skipped} \u4E2A\u6B65\u9AA4_`);
+  }
+  for (const tool of display) lines.push(formatTurnToolLine(tool));
+  return {
+    schema: "2.0",
+    config: { update_multi: true, summary: { content: `${BRAND.name} \xB7 \u5DE5\u4F5C\u4E2D #${segment.index}` } },
+    body: { elements: [markdown(lines.join("\n"))] }
+  };
+}
+function buildActiveTurnCard(state, segment, filterForPrefs) {
+  const filtered = filterForPrefs(filterStateForActiveSegment(state, segment.toolOffset));
+  const card = renderCard(filtered);
+  card.config = { ...card.config, update_multi: true };
+  return card;
+}
+function createTurnCardManager(channel, chatId, sendOpts, filterForPrefs) {
+  let segmentIndex = 0;
+  let activeSegment = null;
+  let lastUpdateAt = 0;
+  let pendingTimer = null;
+  let updateChain = Promise.resolve();
+  const sealActiveSegment = async (state) => {
+    if (!activeSegment || activeSegment.sealed) return;
+    const sealed = { index: activeSegment.index, toolOffset: activeSegment.toolOffset };
+    const card = buildSealedTurnCard(filterForPrefs(state), sealed);
+    try {
+      await updateManagedCard(channel, activeSegment.messageId, card);
+      forgetManagedCard(activeSegment.messageId);
+      log.info("stream", "turn-segment-sealed", { index: activeSegment.index });
+    } catch (err) {
+      log.warn("stream", "turn-segment-seal-failed", { index: activeSegment.index, error: String(err) });
+    }
+    activeSegment.sealed = true;
+    activeSegment.sealedToolCount = state.blocks.filter((b) => b.kind === "tool").length;
+  };
+  const openSegment = async (state, toolOffset) => {
+    segmentIndex += 1;
+    const segment = { index: segmentIndex, toolOffset };
+    const card = buildActiveTurnCard(state, segment, filterForPrefs);
+    const replyTo = segmentIndex === 1 ? sendOpts.replyTo : void 0;
+    const { messageId, cardId } = await sendManagedCard(channel, chatId, card, replyTo);
+    activeSegment = { ...segment, messageId, cardId, sealed: false };
+    log.info("stream", "turn-segment-opened", { index: segmentIndex, toolOffset, messageId });
+  };
+  const runUpdate = async (state, force = false) => {
+    const now = Date.now();
+    const interval = turnUpdateIntervalMs(state);
+    if (!force && state.terminal === "running" && interval > 0 && now - lastUpdateAt < interval) {
+      return;
+    }
+    if (!activeSegment || activeSegment.sealed) {
+      const toolOffset = activeSegment?.sealedToolCount ? Math.max(0, activeSegment.sealedToolCount - TURN_CARD_SEGMENT_CARRY_TOOLS) : 0;
+      activeSegment = null;
+      await openSegment(state, toolOffset);
+      lastUpdateAt = now;
+      return;
+    }
+    const card = buildActiveTurnCard(state, activeSegment, filterForPrefs);
+    const cardBytes = JSON.stringify(card).length;
+    if (cardBytes > TURN_CARD_MAX_BYTES && state.terminal === "running") {
+      await sealActiveSegment(state);
+      const toolOffset = Math.max(0, state.blocks.filter((b) => b.kind === "tool").length - TURN_CARD_SEGMENT_CARRY_TOOLS);
+      await openSegment(state, toolOffset);
+      lastUpdateAt = now;
+      return;
+    }
+    try {
+      await updateManagedCard(channel, activeSegment.messageId, card);
+      log.info("stream", "turn-segment-updated", {
+        index: activeSegment.index,
+        bytes: cardBytes,
+        footer: state.footer,
+        terminal: state.terminal
+      });
+    } catch (err) {
+      log.warn("stream", "turn-segment-update-failed", { index: activeSegment.index, error: String(err) });
+      forgetManagedCard(activeSegment.messageId);
+      activeSegment = null;
+    }
+    lastUpdateAt = now;
+  };
+  const enqueueUpdate = (state, force = false) => {
+    updateChain = updateChain.then(() => runUpdate(state, force)).catch((err) => {
+      log.warn("stream", "turn-chain-failed", { error: String(err) });
+    });
+    return updateChain;
+  };
+  const handleUpdate = (state, opts = {}) => {
+    const force = opts.force === true;
+    const now = Date.now();
+    if (!force && state.terminal === "running") {
+      const interval = turnUpdateIntervalMs(state);
+      const since = now - lastUpdateAt;
+      if (interval > 0 && since < interval) {
+        if (!pendingTimer) {
+          pendingTimer = setTimeout(() => {
+            pendingTimer = null;
+            void enqueueUpdate(state, false);
+          }, interval - since);
+        }
+        return updateChain;
+      }
+    }
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+    return enqueueUpdate(state, force);
+  };
+  const finalize = async (state) => {
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+    await enqueueUpdate(state, true);
+    await updateChain;
+    if (!activeSegment || activeSegment.sealed) return;
+    const card = buildActiveTurnCard(state, activeSegment, filterForPrefs);
+    card.config = {
+      ...card.config,
+      streaming_mode: false,
+      update_multi: true
+    };
+    try {
+      await updateManagedCard(channel, activeSegment.messageId, card);
+      await new Promise((r) => setTimeout(r, 600));
+      await channel.rawClient.im.v1.message.patch({
+        path: { message_id: activeSegment.messageId },
+        data: { content: JSON.stringify(card) }
+      });
+      log.info("stream", "turn-finalized", { index: activeSegment.index, terminal: state.terminal });
+    } catch (err) {
+      log.warn("stream", "turn-finalize-failed", { index: activeSegment.index, error: String(err) });
+    } finally {
+      forgetManagedCard(activeSegment.messageId);
+      activeSegment = null;
+    }
+  };
+  return { handleUpdate, finalize };
 }
 function summaryText(state) {
   const brand = BRAND.name;
@@ -2914,9 +3172,14 @@ function summaryText(state) {
   if (state.terminal === "idle_timeout") return `${brand} \xB7 \u5DF2\u8D85\u65F6`;
   if (state.terminal === "error") return `${brand} \xB7 \u51FA\u9519`;
   if (state.terminal === "done") return `${brand} \xB7 \u5DF2\u5B8C\u6210`;
-  if (state.footer === "tool_running") return `${brand} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177`;
-  if (state.footer === "streaming") return `${brand} \xB7 \u6B63\u5728\u8F93\u51FA`;
-  return `${brand} \xB7 \u601D\u8003\u4E2D`;
+  const runElapsed = formatToolElapsed(state.runStartedAt ?? state.toolStartedAt);
+  if (state.footer === "tool_running") {
+    return runElapsed ? `${brand} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177${runElapsed}` : `${brand} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177`;
+  }
+  if (state.footer === "streaming") {
+    return runElapsed ? `${brand} \xB7 \u6B63\u5728\u8F93\u51FA${runElapsed}` : `${brand} \xB7 \u6B63\u5728\u8F93\u51FA`;
+  }
+  return runElapsed ? `${brand} \xB7 \u601D\u8003\u4E2D${runElapsed}` : `${brand} \xB7 \u601D\u8003\u4E2D`;
 }
 function truncate2(s, max) {
   return s.length > max ? `${s.slice(0, max)}\u2026` : s;
@@ -2977,7 +3240,8 @@ function reduce(state, evt) {
         ...state,
         blocks: [...closeStreamingText(state.blocks), { kind: "tool", tool }],
         reasoning: { ...state.reasoning, active: false },
-        footer: "tool_running"
+        footer: "tool_running",
+        toolStartedAt: state.toolStartedAt ?? Date.now()
       };
     }
     case "tool_result": {
@@ -2992,7 +3256,8 @@ function reduce(state, evt) {
           }
         };
       });
-      return { ...state, blocks };
+      const stillRunning = blocks.some((b) => b.kind === "tool" && b.tool.status === "running");
+      return { ...state, blocks, toolStartedAt: stillRunning ? state.toolStartedAt : void 0 };
     }
     case "error": {
       return { ...state, terminal: "error", errorMsg: evt.message, footer: null };
@@ -3228,7 +3493,8 @@ var handlers = {
   "/exit": handleExit,
   "/doctor": handleDoctor,
   "/reconnect": handleReconnect,
-  "/model": handleModel
+  "/model": handleModel,
+  "/usage": handleUsage
 };
 var ADMIN_COMMANDS = /* @__PURE__ */ new Set([
   "/account",
@@ -3600,23 +3866,61 @@ async function resolveModelDisplayName(binary, slug) {
     return void 0;
   }
 }
+function parseCurrentModelFromList(stdout) {
+  for (const line of stdout.split("\n")) {
+    const m = line.trim().match(/^(\S+)\s+-\s+(.+?)\s+\(current\)\s*$/i);
+    if (m) return { slug: m[1], name: m[2].trim() };
+  }
+  return void 0;
+}
+async function resolveAccountDefaultModel(binary) {
+  try {
+    const about = await runCursorAboutJson(binary);
+    if (about?.model && String(about.model).trim()) {
+      return String(about.model).trim();
+    }
+  } catch {}
+  try {
+    const stdout = await runCursorModelsList(binary);
+    const current = parseCurrentModelFromList(stdout);
+    if (current) return current.name;
+  } catch {}
+  return void 0;
+}
+async function resolveEffectiveModelDisplay(binary, scope, sessions) {
+  const sess = sessions.getRaw(scope);
+  const chatSlug = sessions.getChatPreferredModelSlug(scope);
+  const globalSlug = sessions.getGlobalPreferredModelSlug();
+  const effectiveSlug = chatSlug ?? globalSlug;
+  const lastRunDisplay = typeof sess?.model === "string" ? sess.model.trim() : "";
+  const preferredDisplay = effectiveSlug ? await resolveModelDisplayName(binary, effectiveSlug) : void 0;
+  const accountDefault = !effectiveSlug ? await resolveAccountDefaultModel(binary) : void 0;
+  const displayName = preferredDisplay ?? accountDefault ?? lastRunDisplay;
+  return displayName || void 0;
+}
 async function handleModel(args, ctx) {
   const trimmed = args.trim();
   if (!trimmed) {
     const sess = ctx.sessions.getRaw(ctx.scope);
-    const slug = ctx.sessions.getPreferredModelSlug(ctx.scope);
+    const chatSlug = ctx.sessions.getChatPreferredModelSlug(ctx.scope);
+    const globalSlug = ctx.sessions.getGlobalPreferredModelSlug();
+    const effectiveSlug = chatSlug ?? globalSlug;
     const lastRunDisplay = typeof sess?.model === "string" ? sess.model.trim() : "";
     const binary = ctx.agent?.binary ?? "cursor-agent";
-    const preferredDisplay = slug ? await resolveModelDisplayName(binary, slug) : void 0;
-    const displayName = preferredDisplay ?? lastRunDisplay;
+    const preferredDisplay = effectiveSlug ? await resolveModelDisplayName(binary, effectiveSlug) : void 0;
+    const accountDefault = !effectiveSlug ? await resolveAccountDefaultModel(binary) : void 0;
+    const displayName = preferredDisplay ?? accountDefault ?? lastRunDisplay;
+    const source = preferredDisplay ? (chatSlug ? "\u672C\u804A\u5929\u6307\u5B9A" : "\u5168\u5C40\u6307\u5B9A") : accountDefault ? "Cursor \u8D26\u6237\u9ED8\u8BA4" : lastRunDisplay ? "\u4E0A\u4E00\u8F6E\u5B9E\u9645" : "";
     if (displayName) {
-      const lines = [
-        `\u663E\u793A\u540D\uFF1A${displayName}`,
+      const lines = [`\u663E\u793A\u540D\uFF1A${displayName}`];
+      if (effectiveSlug) lines.push(`slug\uFF1A\`${effectiveSlug}\`\uFF08${source}\uFF09`);
+      else if (source) lines.push(`\u6765\u6E90\uFF1A${source}`);
+      lines.push(
         "",
         "\u5217\u8868\uFF1A`/model list`",
         "\u5207\u6362\uFF1A`/model <slug>`",
         "\u6062\u590D\u9ED8\u8BA4\uFF1A`/model default`"
-      ];
+      );
       await reply(ctx, `\u{1F916} \u5F53\u524D\u6A21\u578B
 
 ${lines.join("\n")}`);
@@ -3653,6 +3957,236 @@ ${lines.join("\n")}`);
     `\u2713 \u5DF2\u8BBE\u7F6E\u6A21\u578B \`${slug}\`\u3002
 
 \u4E0B\u4E00\u6761\u6D88\u606F\u8D77\u751F\u6548\uFF08\u5F53\u524D\u8FD9\u6761\u4ECD\u7528\u539F\u6A21\u578B\u8DD1\u5B8C\uFF09\u3002`
+  );
+}
+function pickUsageField(text, label) {
+  const re = new RegExp(`^\\s*${label}:\\s*(.+)$`, "im");
+  const m = text.match(re);
+  return m?.[1]?.trim() ?? "";
+}
+var USAGE_MONTH_ZH = {
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  aug: 8,
+  sep: 9,
+  oct: 10,
+  nov: 11,
+  dec: 12
+};
+function localizeBillingCycle(billing) {
+  const m = billing.match(/^(\w{3})\s+(\d{1,2}),\s+(\d{4})\s+to\s+(\w{3})\s+(\d{1,2}),\s+(\d{4})$/i);
+  if (!m) return billing;
+  const startMonth = USAGE_MONTH_ZH[m[1].toLowerCase()];
+  const endMonth = USAGE_MONTH_ZH[m[4].toLowerCase()];
+  if (!startMonth || !endMonth) return billing;
+  return `${m[3]}\u5E74${startMonth}\u6708${Number(m[2])}\u65E5 \u81F3 ${m[6]}\u5E74${endMonth}\u6708${Number(m[5])}\u65E5`;
+}
+var CURSOR_USAGE_DB_REL = "Library/Application Support/Cursor/User/globalStorage/state.vscdb";
+async function sqlite3Scalar(dbPath, sql) {
+  const { spawnSync } = await import("child_process");
+  const r = spawnSync("sqlite3", [dbPath, sql], { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 });
+  if (r.error) throw r.error;
+  if (r.status !== 0) {
+    const err = (r.stderr || r.stdout || "").trim() || `sqlite3 exited ${r.status}`;
+    throw new Error(err);
+  }
+  return (r.stdout ?? "").trim();
+}
+async function getCursorSessionToken() {
+  const { homedir } = await import("os");
+  const { join } = await import("path");
+  const dbPath = join(homedir(), CURSOR_USAGE_DB_REL);
+  const token = await sqlite3Scalar(dbPath, "SELECT value FROM ItemTable WHERE key='cursorAuth/accessToken'");
+  const bootstrap = await sqlite3Scalar(dbPath, "SELECT value FROM ItemTable WHERE key='workbench.experiments.statsigBootstrap'");
+  if (!token || !bootstrap) throw new Error("Cursor credentials not found in local database");
+  let userId;
+  try {
+    userId = JSON.parse(bootstrap)?.user?.userID;
+  } catch {
+    throw new Error("Failed to parse Cursor user ID from local database");
+  }
+  if (!userId) throw new Error("Cursor user ID missing in local database");
+  return `${userId}::${token}`;
+}
+async function fetchCursorUsageApi() {
+  const session = await getCursorSessionToken();
+  const res = await fetch("https://cursor.com/api/usage-summary", {
+    headers: {
+      Accept: "application/json",
+      Cookie: `WorkosCursorSessionToken=${encodeURIComponent(session)}`
+    },
+    signal: AbortSignal.timeout(15e3)
+  });
+  if (!res.ok) {
+    throw new Error(`usage-summary HTTP ${res.status}: ${res.statusText}`);
+  }
+  return res.json();
+}
+function formatApiBillingCycle(start, end) {
+  if (!start || !end) return "";
+  const s = new Date(start);
+  const e = new Date(end);
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return "";
+  const fmt = (d) => `${d.getFullYear()}\u5E74${d.getMonth() + 1}\u6708${d.getDate()}\u65E5`;
+  return `${fmt(s)} \u81F3 ${fmt(e)}`;
+}
+function formatUsagePercent(value) {
+  if (value == null || Number.isNaN(Number(value))) return null;
+  return `${Math.round(Number(value))}%`;
+}
+function parseCursorUsageApi(data) {
+  const plan = data?.individualUsage?.plan ?? {};
+  return {
+    membership: data?.membershipType ?? "",
+    billing: formatApiBillingCycle(data?.billingCycleStart, data?.billingCycleEnd),
+    autoPercent: plan.autoPercentUsed,
+    apiPercent: plan.apiPercentUsed,
+    totalPercent: plan.totalPercentUsed,
+    used: plan.used,
+    remaining: plan.remaining,
+    included: plan.breakdown?.included,
+    bonus: plan.breakdown?.bonus,
+    total: plan.breakdown?.total
+  };
+}
+function localizeUsagePercent(msg, kind) {
+  if (!msg) return msg;
+  const total = msg.match(/(\d+)%\s*of your included total usage/i);
+  if (total) return `\u5DF2\u7528 ${total[1]}%`;
+  const api = msg.match(/(\d+)%\s*of your included API usage/i);
+  if (api) return `\u5DF2\u7528 ${api[1]}%`;
+  if (kind === "total" && /^\d+%$/.test(msg.trim())) return `\u5DF2\u7528 ${msg.trim()}`;
+  if (kind === "api" && /^\d+%$/.test(msg.trim())) return `\u5DF2\u7528 ${msg.trim()}`;
+  return msg;
+}
+function parseCursorUsageSummary(stdout) {
+  const membership = pickUsageField(stdout, "Membership") || pickUsageField(stdout, "Membership:");
+  const billing = pickUsageField(stdout, "Billing Cycle");
+  const used = pickUsageField(stdout, "Used");
+  const remaining = pickUsageField(stdout, "Remaining");
+  const included = pickUsageField(stdout, "- Included") || pickUsageField(stdout, "Included");
+  const bonus = pickUsageField(stdout, "- Bonus") || pickUsageField(stdout, "Bonus");
+  const total = pickUsageField(stdout, "- Total") || pickUsageField(stdout, "Total");
+  const totalMsg = pickUsageField(stdout, "AUTO MODEL MESSAGE") || stdout.match(/You've used (\d+% of your included total usage)/i)?.[1];
+  const namedMsg = pickUsageField(stdout, "NAMED MODEL MESSAGE") || stdout.match(/You've used (\d+% of your included API usage)/i)?.[1];
+  return { membership, billing, used, remaining, included, bonus, total, totalMsg, namedMsg };
+}
+async function runCursorAboutJson(binary) {
+  const { spawnSync } = await import("child_process");
+  const r = spawnSync(binary, ["about", "--format", "json"], {
+    encoding: "utf8",
+    env: { ...process.env, CURSOR_LARK: "1" },
+    maxBuffer: 1024 * 1024
+  });
+  if (r.error) throw r.error;
+  if (r.status !== 0) {
+    const err = (r.stderr || r.stdout || "").trim() || `cursor-agent about exited ${r.status}`;
+    throw new Error(err);
+  }
+  try {
+    return JSON.parse(r.stdout ?? "{}");
+  } catch {
+    return {};
+  }
+}
+async function runCursorUsageSummary() {
+  const { spawnSync } = await import("child_process");
+  const r = spawnSync("npx", ["--yes", "cursor-usage@latest", "summary"], {
+    encoding: "utf8",
+    env: { ...process.env, CURSOR_LARK: "1" },
+    maxBuffer: 2 * 1024 * 1024,
+    timeout: 45e3
+  });
+  if (r.error) throw r.error;
+  if (r.status !== 0) {
+    const err = (r.stderr || r.stdout || "").trim() || `cursor-usage summary exited ${r.status}`;
+    throw new Error(err);
+  }
+  return r.stdout ?? "";
+}
+function formatUsageMarkdown(about, usage, effectiveModel) {
+  const lines = ["\u{1F4CA} **Cursor \u989D\u5EA6**", ""];
+  if (about?.userEmail) lines.push(`\u8D26\u53F7\uFF1A${about.userEmail}`);
+  if (about?.subscriptionTier || usage.membership) {
+    lines.push(`\u5957\u9910\uFF1A${String(about?.subscriptionTier || usage.membership).toUpperCase()}`);
+  }
+  if (effectiveModel) lines.push(`\u5F53\u524D\u6A21\u578B\uFF1A${effectiveModel}`);
+  else if (about?.model) lines.push(`\u5F53\u524D\u6A21\u578B\uFF1A${about.model}`);
+  if (usage.billing) {
+    lines.push(`\u8D26\u5355\u5468\u671F\uFF1A${usage.billing.includes("\u5E74") ? usage.billing : localizeBillingCycle(usage.billing)}`);
+  }
+  lines.push("");
+  lines.push("**\u4E3B\u8981\u770B\u8FD9\u4E09\u9879**");
+  const totalPct = formatUsagePercent(usage.totalPercent);
+  const autoPct = formatUsagePercent(usage.autoPercent);
+  const apiPct = formatUsagePercent(usage.apiPercent);
+  if (totalPct) lines.push(`- \u5957\u9910\u603B\u7528\u91CF\uFF1A\u5DF2\u7528 ${totalPct}`);
+  if (autoPct) lines.push(`- Auto + Composer\uFF1A\u5DF2\u7528 ${autoPct}`);
+  if (apiPct) lines.push(`- API \u6307\u5B9A\u6A21\u578B\uFF1A\u5DF2\u7528 ${apiPct}`);
+  if (usage.totalMsg && !totalPct) lines.push(`- \u5957\u9910\u603B\u7528\u91CF\uFF1A${localizeUsagePercent(usage.totalMsg, "total")}`);
+  if (usage.namedMsg && !apiPct) lines.push(`- API \u6307\u5B9A\u6A21\u578B\uFF1A${localizeUsagePercent(usage.namedMsg, "api")}`);
+  if (!totalPct && !autoPct && !apiPct && !usage.totalMsg && !usage.namedMsg) {
+    lines.push("- \u672A\u8BFB\u5230\u989D\u5EA6\u767E\u5206\u6BD4\uFF08\u8BF7\u6253\u5F00 Dashboard \u786E\u8BA4\uFF09");
+  }
+  lines.push("");
+  lines.push("\u8BE6\u7EC6\uFF1A[cursor.com/dashboard/spending](https://cursor.com/dashboard/spending)");
+  lines.push("_\u6570\u636E\u6765\u81EA\u672C\u673A Cursor API \u5FEB\u7167\uFF0C\u53EF\u80FD\u6709\u51E0\u5206\u949F\u5EF6\u8FDF\u3002_");
+  return lines.join("\n");
+}
+async function handleUsage(_args, ctx) {
+  const binary = ctx.agent?.binary ?? "cursor-agent";
+  let about = {};
+  let effectiveModel;
+  try {
+    about = await runCursorAboutJson(binary);
+  } catch (err) {
+    log.warn("command", "usage-about-failed", { error: String(err) });
+  }
+  try {
+    effectiveModel = await resolveEffectiveModelDisplay(binary, ctx.scope, ctx.sessions);
+  } catch (err) {
+    log.warn("command", "usage-model-failed", { error: String(err) });
+  }
+  try {
+    const apiData = await fetchCursorUsageApi();
+    const usage = parseCursorUsageApi(apiData);
+    await reply(ctx, formatUsageMarkdown(about, usage, effectiveModel));
+    return;
+  } catch (err) {
+    log.warn("command", "usage-api-failed", { error: String(err) });
+  }
+  try {
+    const stdout = await runCursorUsageSummary();
+    const usage = parseCursorUsageSummary(stdout);
+    await reply(ctx, formatUsageMarkdown(about, usage, effectiveModel));
+    return;
+  } catch (err) {
+    log.warn("command", "usage-summary-failed", { error: String(err) });
+  }
+  if (about?.userEmail || about?.subscriptionTier) {
+    await reply(
+      ctx,
+      `\u{1F4CA} **Cursor \u989D\u5EA6\uFF08\u57FA\u7840\u4FE1\u606F\uFF09**
+
+\u8D26\u53F7\uFF1A${about.userEmail ?? "\u2014"}
+\u5957\u9910\uFF1A${about.subscriptionTier ?? "\u2014"}
+\u6A21\u578B\uFF1A${effectiveModel ?? about.model ?? "\u2014"}
+
+\u26A0\uFE0F \u672C\u673A\u6682\u65F6\u62C9\u4E0D\u5230\u5B8C\u6574\u989D\u5EA6\uFF08cursor-usage \u5931\u8D25\uFF09\u3002\u8BF7\u6253\u5F00\uFF1A
+https://cursor.com/dashboard/spending
+
+\u6392\u67E5\uFF1A\u786E\u4FDD\u672C\u673A\u5DF2\u767B\u5F55 Cursor\uFF0C\u6216\u5728\u7EC8\u7AEF\u8DD1 \`npx cursor-usage@latest summary\``
+    );
+    return;
+  }
+  await reply(
+    ctx,
+    `\u274C \u65E0\u6CD5\u67E5\u8BE2 Cursor \u989D\u5EA6\u3002\u8BF7\u786E\u8BA4\u672C\u673A\u5DF2\u6267\u884C \`cursor-agent login\`\uFF0C\u6216\u6253\u5F00 https://cursor.com/dashboard/spending`
   );
 }
 async function handleTimeout(args, ctx) {
@@ -4329,6 +4863,27 @@ function makeFakeMsg(evt, threadId) {
 var REASONING_PREVIEW_MAX = 800;
 function renderText(state) {
   const parts = [];
+  const progressBanner = renderRunProgressBanner(state);
+  const completionBanner = renderRunCompletionBanner(state);
+  if (progressBanner) parts.push(progressBanner);
+  if (completionBanner) parts.push(completionBanner);
+  if (state.terminal === "running" && state.footer === "tool_running") {
+    const latest = getRunningTool(state);
+    const doneCount = state.blocks.filter((b) => b.kind === "tool" && b.tool.status !== "running").length;
+    const totalTools = state.blocks.filter((b) => b.kind === "tool").length;
+    if (latest) {
+      const toolElapsed = formatRunElapsed(state.toolStartedAt);
+      const summary = summarizeInput(latest.name, latest.input);
+      parts.push([
+        `**\u5F53\u524D\u6B65\u9AA4** \xB7 \u5DF2\u6267\u884C **${toolElapsed}** \xB7 \u5B8C\u6210 **${doneCount}/${totalTools}** \u4E2A\u5DE5\u5177`,
+        toolHeaderText(latest),
+        summary ? `\`\`\`
+${summary.slice(0, 400)}
+\`\`\`` : "",
+        "_\u957F\u4EFB\u52A1\u6309\u5361\u7247\u5206\u6BB5\u5C55\u793A\uFF1B\u6EE1\u4E86\u4F1A\u81EA\u52A8\u5F80\u4E0B\u63A5\u7740\u5237\uFF1B\u5B8C\u6210\u540E\u6700\u540E\u4E00\u5F20\u5361\u663E\u793A\u7ED3\u679C\u3002_"
+      ].filter(Boolean).join("\n\n"));
+    }
+  }
   if (state.terminal === "running" && state.reasoning.content.trim()) {
     parts.push(
       `**${BRAND.name} \xB7 \u601D\u8003\u4E2D**
@@ -4336,6 +4891,7 @@ ${truncateReasoning(state.reasoning.content)}`
     );
   }
   let toolBuf = [];
+  const runningNow = state.terminal === "running" && state.footer === "tool_running" && getRunningTool(state);
   const flushToolBuf = () => {
     if (toolBuf.length === 0) return;
     parts.push(`**\u5DE5\u5177\u8C03\u7528** (\u5171 ${toolBuf.length} \u4E2A)
@@ -4344,6 +4900,7 @@ ${toolBuf.join("\n")}`);
   };
   for (const block of state.blocks) {
     if (block.kind === "tool") {
+      if (runningNow && block.tool.status !== "running") continue;
       toolBuf.push(toolLine(block.tool));
       continue;
     }
@@ -4382,7 +4939,9 @@ function footerLine(status, state) {
   if (status === "thinking") return `_${p} \xB7 \u6B63\u5728\u601D\u8003\u2026_`;
   if (status === "tool_running") {
     const n = state.blocks.filter((b) => b.kind === "tool").length;
-    return n > 0 ? `_${p} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177\u2026 (\u5DF2 ${n} \u4E2A)_` : `_${p} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177\u2026_`;
+    const elapsed = formatToolElapsed(state.runStartedAt ?? state.toolStartedAt);
+    const suffix = elapsed ? `${elapsed}` : "";
+    return n > 0 ? `_${p} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177\u2026 (\u5DF2 ${n} \u4E2A${suffix})_` : `_${p} \xB7 \u6B63\u5728\u8C03\u7528\u5DE5\u5177\u2026${suffix}_`;
   }
   return `_${p} \xB7 \u6B63\u5728\u8F93\u51FA\u2026_`;
 }
@@ -5722,7 +6281,10 @@ async function runAgentBatch(deps) {
     replyTo: lastMsg.messageId,
     ...mode === "topic" && threadId ? { replyInThread: true } : {}
   };
-  const runSeed = seedRunState(sessions.getRaw(scope)?.model);
+  const runSeed = {
+    ...seedRunState(sessions.getRaw(scope)?.model),
+    runStartedAt: Date.now()
+  };
   const streamAgent = (onState) => processAgentStreamWithRetry({
     agent,
     activeRuns,
@@ -5734,83 +6296,41 @@ async function runAgentBatch(deps) {
     runSeed,
     flush: onState
   });
+  const turnCards = createTurnCardManager(channel, chatId, sendOpts, filterForPrefs);
+  const syncTurnCards = (state) => {
+    void turnCards.handleUpdate(state);
+  };
+  syncTurnCards(runSeed);
   try {
+    let lastState = runSeed;
     let streamFailed = false;
-    let lastStreamedState = runSeed;
-    if (replyMode === "card") {
-      let cardMsgId;
-      try {
-        const result = await channel.stream(
-          chatId,
-          {
-            card: {
-              initial: renderCard(runSeed),
-              producer: async (ctrl) => {
-                lastStreamedState = await streamAgent(async (state) => {
-                  lastStreamedState = state;
-                  await ctrl.update(renderCard(filterForPrefs(state)));
-                });
-              }
-            }
-          },
-          sendOpts
-        );
-        cardMsgId = result?.messageId;
-      } catch (streamErr) {
-        streamFailed = true;
-        log.warn("stream", "card-stream-failed", { error: String(streamErr) });
-      }
-      if (!streamFailed && cardMsgId && lastStreamedState.terminal !== "running") {
-        await new Promise((r) => setTimeout(r, 600));
-        try {
-          const finalCard = renderCard(filterForPrefs(lastStreamedState));
-          await channel.rawClient.im.v1.message.patch({
-            path: { message_id: cardMsgId },
-            data: { content: JSON.stringify(finalCard) }
-          });
-          log.info("stream", "card-final-double-push");
-        } catch (doublePushErr) {
-          log.warn("stream", "card-double-push-failed", { error: String(doublePushErr) });
-        }
-      }
-    } else if (replyMode === "markdown") {
-      try {
-        await channel.stream(
-          chatId,
-          {
-            markdown: async (ctrl) => {
-              lastStreamedState = await streamAgent(async (state) => {
-                lastStreamedState = state;
-                await ctrl.setContent(renderText(filterForPrefs(state)));
-              });
-            }
-          },
-          sendOpts
-        );
-      } catch (streamErr) {
-        streamFailed = true;
-        log.warn("stream", "markdown-stream-failed", { error: String(streamErr) });
-      }
-    } else {
-      let finalState = runSeed;
-      finalState = await streamAgent(async (state) => {
-        finalState = state;
+    try {
+      lastState = await streamAgent(async (state) => {
+        lastState = state;
+        syncTurnCards(state);
       });
-      const body = renderText(filterForPrefs(finalState));
-      if (body.trim()) {
-        await channel.send(chatId, { markdown: body }, sendOpts);
+      await turnCards.finalize(lastState);
+    } catch (streamErr) {
+      streamFailed = true;
+      log.warn("stream", "turn-run-failed", { error: String(streamErr) });
+      try {
+        await turnCards.finalize(lastState);
+      } catch (finalizeErr) {
+        log.warn("stream", "turn-finalize-on-error-failed", { error: String(finalizeErr) });
+      }
+      if (lastState.terminal !== "running") {
+        try {
+          const card = renderCard(filterForPrefs(lastState));
+          card.config = { ...card.config, streaming_mode: false };
+          await sendManagedCard(channel, chatId, card, sendOpts.replyTo);
+          log.info("stream", "turn-fallback-sent");
+        } catch (fallbackErr) {
+          log.warn("stream", "turn-fallback-failed", { error: String(fallbackErr) });
+        }
       }
     }
-    if (streamFailed && lastStreamedState.terminal !== "running") {
-      const fallback = renderText(filterForPrefs(lastStreamedState));
-      if (fallback.trim()) {
-        try {
-          await channel.send(chatId, { markdown: fallback }, sendOpts);
-          log.info("stream", "fallback-sent");
-        } catch (fallbackErr) {
-          log.warn("stream", "fallback-failed", { error: String(fallbackErr) });
-        }
-      }
+    if (streamFailed) {
+      log.info("stream", "turn-run-ended-with-fallback", { terminal: lastState.terminal });
     }
   } catch (err) {
     log.fail("stream", err);
@@ -5863,10 +6383,38 @@ async function processAgentStreamWithRetry(deps) {
   return lastState;
 }
 async function processAgentStream(handle, sessions, scope, cwd, idleTimeoutMs, flush) {
-  let state = seedRunState(sessions.getRaw(scope)?.model);
+  let state = {
+    ...seedRunState(sessions.getRaw(scope)?.model),
+    runStartedAt: Date.now()
+  };
   let idleFired = false;
   let timer;
   const inFlightTools = /* @__PURE__ */ new Set();
+  const HEARTBEAT_INTERVAL_MS = 30 * 1e3;
+  let heartbeatTimer;
+  const startHeartbeat = () => {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(() => {
+      if (state.terminal !== "running") return;
+      state = {
+        ...state,
+        progressUpdatedAt: Date.now(),
+        progressTick: (state.progressTick ?? 0) + 1
+      };
+      log.info("agent", "heartbeat", {
+        footer: state.footer,
+        inFlight: inFlightTools.size,
+        progressTick: state.progressTick,
+        elapsed: formatRunElapsed(state.runStartedAt)
+      });
+      flush(state).catch((err) => {
+        log.warn("agent", "heartbeat-flush-failed", { error: String(err) });
+      });
+    }, HEARTBEAT_INTERVAL_MS);
+  };
+  const stopHeartbeat = () => {
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = void 0; }
+  };
   const armOrPauseIdle = () => {
     if (!idleTimeoutMs) return;
     if (timer) clearTimeout(timer);
@@ -5881,6 +6429,7 @@ async function processAgentStream(handle, sessions, scope, cwd, idleTimeoutMs, f
     }, idleTimeoutMs);
   };
   armOrPauseIdle();
+  startHeartbeat();
   try {
     for await (const evt of handle.run.events) {
       if (handle.interrupted) break;
@@ -5924,6 +6473,7 @@ async function processAgentStream(handle, sessions, scope, cwd, idleTimeoutMs, f
       if (state.terminal !== "running") break;
     }
   } finally {
+    stopHeartbeat();
     if (timer) clearTimeout(timer);
   }
   if (state.terminal === "running") {
@@ -6137,25 +6687,49 @@ var SessionStore = class {
     return this.data[chatId];
   }
   getPreferredModelSlug(chatId) {
+    const chatSlug = this.data[chatId]?.preferredModelSlug;
+    if (typeof chatSlug === "string" && chatSlug.trim()) return chatSlug.trim();
+    return this.getGlobalPreferredModelSlug();
+  }
+  getChatPreferredModelSlug(chatId) {
     const slug = this.data[chatId]?.preferredModelSlug;
     return typeof slug === "string" && slug.trim() ? slug.trim() : void 0;
   }
+  getGlobalPreferredModelSlug() {
+    const slug = this.data["_global"]?.preferredModelSlug;
+    return typeof slug === "string" && slug.trim() ? slug.trim() : void 0;
+  }
   setPreferredModel(chatId, slug) {
+    const trimmedSlug = slug.trim();
     const prev = this.data[chatId] ?? { updatedAt: Date.now() };
     this.data[chatId] = {
       ...prev,
-      preferredModelSlug: slug.trim(),
+      preferredModelSlug: trimmedSlug,
+      updatedAt: Date.now()
+    };
+    const globalPrev = this.data["_global"] ?? {};
+    this.data["_global"] = {
+      ...globalPrev,
+      preferredModelSlug: trimmedSlug,
       updatedAt: Date.now()
     };
     this.schedulePersist();
   }
   clearPreferredModel(chatId) {
+    let cleared = false;
     const prev = this.data[chatId];
-    if (!prev || prev.preferredModelSlug === void 0) return false;
-    const { preferredModelSlug: _, ...rest } = prev;
-    this.data[chatId] = { ...rest, updatedAt: Date.now() };
-    this.schedulePersist();
-    return true;
+    if (prev && prev.preferredModelSlug !== void 0) {
+      const { preferredModelSlug: _, ...rest } = prev;
+      this.data[chatId] = { ...rest, updatedAt: Date.now() };
+      cleared = true;
+    }
+    if (this.data["_global"]?.preferredModelSlug !== void 0) {
+      const { preferredModelSlug: _, ...rest } = this.data["_global"];
+      this.data["_global"] = { ...rest, updatedAt: Date.now() };
+      cleared = true;
+    }
+    if (cleared) this.schedulePersist();
+    return cleared;
   }
   set(chatId, sessionId, cwd, model) {
     const prev = this.data[chatId];
